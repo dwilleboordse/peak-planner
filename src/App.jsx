@@ -138,7 +138,7 @@ function Modal({children,onClose,title,wide}){
 // EVENT DETAIL MODAL (view + edit plan)
 // ═══════════════════════════════════════════
 
-function EventDetailModal({ event, plan, onClose, onSavePlan, onGeneratePlan, loading }) {
+function EventDetailModal({ event, plan, onClose, onSavePlan, onDeletePlan, onGeneratePlan, loading }) {
   const tc = TYPE_COLORS[event.type] || C.accent;
   const mi = parseInt(event.date.split("-")[0]) - 1;
   const day = parseInt(event.date.split("-")[1]);
@@ -219,6 +219,11 @@ function EventDetailModal({ event, plan, onClose, onSavePlan, onGeneratePlan, lo
         <Button variant="secondary" size="sm" onClick={() => onGeneratePlan(event)} disabled={loading}>
           {loading ? "Generating..." : (plan ? "Regenerate with AI" : "Generate with AI")}
         </Button>
+        {plan && onDeletePlan && (
+          <Button variant="danger" size="sm" onClick={() => { if (confirm("Delete this plan?")) { onDeletePlan(event.id); onClose(); } }}>
+            Delete Plan
+          </Button>
+        )}
       </div>
 
       {/* EDIT MODE */}
@@ -630,6 +635,12 @@ export default function App() {
     updateClient({ ...selectedClient, plans: np });
   };
 
+  const deletePlanForEvent = (eventId) => {
+    const np = { ...selectedClient.plans };
+    delete np[eventId];
+    updateClient({ ...selectedClient, plans: np });
+  };
+
   const addCustomEvent = () => {
     if (!evtName.trim() || !evtDate || !selectedClient) return;
     const parts = evtDate.split("-");
@@ -746,6 +757,7 @@ export default function App() {
           plan={(selectedClient.plans || {})[detailEvent.id]}
           onClose={() => setDetailEvent(null)}
           onSavePlan={(eid, plan) => { savePlanForEvent(eid, plan); }}
+          onDeletePlan={(eid) => { deletePlanForEvent(eid); }}
           onGeneratePlan={(evt) => generateSinglePlan(evt)}
           loading={loading}
         />
