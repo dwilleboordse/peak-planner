@@ -425,7 +425,7 @@ export default function App() {
       const res = await fetch("/api/plan", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 8000, system: SYS,
+          model: "claude-sonnet-4-20250514", max_tokens: 16000, system: SYS,
           messages: [{ role: "user", content: `BRAND: ${client.name}\nNiche: ${client.niche}\nMarkets: ${(client.regions||[]).join(", ")}\nBudget: ${client.budget || "N/A"}\nProducts: ${client.products || "N/A"}\n\nEVENTS:\n${evtList}\n\nGenerate niche events + plans for ALL events.` }],
         }),
       });
@@ -433,8 +433,28 @@ export default function App() {
       if (!ct.includes("application/json")) throw new Error("Server error");
       const d = await res.json();
       if (d.error) throw new Error(typeof d.error === "string" ? d.error : d.error.message);
-      const text = (d.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(text);
+      let text = (d.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
+      if (!text) throw new Error("Empty response.");
+      // Fix truncated JSON
+      if (!text.endsWith("}")) {
+        const lastComplete = Math.max(text.lastIndexOf("}]"), text.lastIndexOf("}"));
+        if (lastComplete > 0) {
+          text = text.substring(0, lastComplete + 1);
+          if (!text.endsWith("]}")) text += "]}";
+          if (!text.endsWith("}")) text += "}";
+        }
+      }
+      let parsed;
+      try { parsed = JSON.parse(text); }
+      catch(e2) {
+        let fixed = text;
+        const ob = (fixed.match(/{/g)||[]).length, cb = (fixed.match(/}/g)||[]).length;
+        for (let i = 0; i < ob - cb; i++) fixed += "}";
+        const oq = (fixed.match(/\[/g)||[]).length, cq = (fixed.match(/\]/g)||[]).length;
+        for (let i = 0; i < oq - cq; i++) fixed += "]";
+        if (!fixed.endsWith("}")) fixed += "}";
+        parsed = JSON.parse(fixed);
+      }
 
       // Add niche events
       const nicheEvts = (parsed.niche_events || []).map(e => ({ ...e, id: e.id || "niche-" + genId() }));
@@ -470,16 +490,29 @@ export default function App() {
       const res = await fetch("/api/plan", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 2000, system: SYS,
+          model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYS,
           messages: [{ role: "user", content: `BRAND: ${selectedClient.name}\nNiche: ${selectedClient.niche}\nMarkets: ${(selectedClient.regions||[]).join(", ")}\nBudget: ${selectedClient.budget||"N/A"}\nProducts: ${selectedClient.products||"N/A"}\n\nGenerate plan for ONE event:\n- ${newEvent.id}: ${newEvent.name} (${newEvent.date}, custom)\n\nReturn JSON with "niche_events":[] and "plans":[single plan].` }],
         }),
       });
       const d = await res.json();
       if (!d.error) {
-        const text = (d.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
-        const parsed = JSON.parse(text);
-        if (parsed.plans?.[0]) {
-          const newPlans = { ...updatedClient.plans, [parsed.plans[0].event_id || newEvent.id]: parsed.plans[0] };
+        let text2 = (d.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
+        if (text2 && !text2.endsWith("}")) {
+          const lc = Math.max(text2.lastIndexOf("}]"), text2.lastIndexOf("}"));
+          if (lc > 0) { text2 = text2.substring(0, lc + 1); if (!text2.endsWith("]}")) text2 += "]}"; if (!text2.endsWith("}")) text2 += "}"; }
+        }
+        let parsed2;
+        try { parsed2 = JSON.parse(text2); } catch(e3) {
+          let f2 = text2;
+          const ob2=(f2.match(/{/g)||[]).length,cb2=(f2.match(/}/g)||[]).length;
+          for(let i=0;i<ob2-cb2;i++) f2+="}";
+          const oq2=(f2.match(/\[/g)||[]).length,cq2=(f2.match(/\]/g)||[]).length;
+          for(let i=0;i<oq2-cq2;i++) f2+="]";
+          if(!f2.endsWith("}")) f2+="}";
+          parsed2 = JSON.parse(f2);
+        }
+        if (parsed2.plans?.[0]) {
+          const newPlans = { ...updatedClient.plans, [parsed2.plans[0].event_id || newEvent.id]: parsed2.plans[0] };
           const finalClient = { ...updatedClient, plans: newPlans };
           const finalData = { ...updatedData, clients: updatedData.clients.map(c => c.id === selectedClient.id ? finalClient : c) };
           save(finalData);
