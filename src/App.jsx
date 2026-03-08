@@ -138,7 +138,7 @@ function Modal({children,onClose,title,wide}){
 // EVENT DETAIL MODAL (view + edit plan)
 // ═══════════════════════════════════════════
 
-function EventDetailModal({ event, plan, onClose, onSavePlan, onDeletePlan, onGeneratePlan, loading }) {
+function EventDetailModal({ event, plan, onClose, onSavePlan, onDeletePlan, onDeleteEvent, onGeneratePlan, loading }) {
   const tc = TYPE_COLORS[event.type] || C.accent;
   const mi = parseInt(event.date.split("-")[0]) - 1;
   const day = parseInt(event.date.split("-")[1]);
@@ -222,6 +222,11 @@ function EventDetailModal({ event, plan, onClose, onSavePlan, onDeletePlan, onGe
         {plan && onDeletePlan && (
           <Button variant="danger" size="sm" onClick={() => { if (confirm("Delete this plan?")) { onDeletePlan(event.id); onClose(); } }}>
             Delete Plan
+          </Button>
+        )}
+        {onDeleteEvent && (
+          <Button variant="danger" size="sm" onClick={() => { if (confirm("Delete this event and its plan?")) { onDeleteEvent(event.id); onClose(); } }}>
+            Delete Event
           </Button>
         )}
       </div>
@@ -478,6 +483,8 @@ function ClientShareView({ client, data, onSave }) {
   const [evtDate, setEvtDate] = useState("");
   const [evtNote, setEvtNote] = useState("");
   const [detail, setDetail] = useState(null);
+  const [calView, setCalView] = useState("list");
+  const [selectedYear, setSelectedYear] = useState(2026);
 
   const submitEvent = () => {
     if (!evtName.trim() || !evtDate) return;
@@ -494,14 +501,29 @@ function ClientShareView({ client, data, onSave }) {
       <style>{css}</style>
       <nav style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(20px) saturate(180%)", borderBottom: `1px solid ${C.border}`, padding: "0 28px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>Peak Planner</span>
-          <Button variant="primary" size="sm" onClick={() => setShowAdd(true)}>Suggest Event</Button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Peak Planner</span>
+            <span style={{ fontSize: 12, color: C.textTertiary }}>D-DOUBLEU MEDIA</span>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))} style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: C.text, background: C.surface3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <div style={{ display: "flex", background: C.surface2, borderRadius: 8, padding: 2 }}>
+              <button onClick={() => setCalView("list")} style={{ fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", background: calView === "list" ? C.surface3 : "transparent", color: calView === "list" ? C.text : C.textTertiary }}>List</button>
+              <button onClick={() => setCalView("calendar")} style={{ fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", background: calView === "calendar" ? C.surface3 : "transparent", color: calView === "calendar" ? C.text : C.textTertiary }}>Calendar</button>
+            </div>
+            <Button variant="primary" size="sm" onClick={() => setShowAdd(true)}>Suggest Event</Button>
+          </div>
         </div>
       </nav>
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 28px" }} className="fade-in">
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", marginBottom: 4 }}>{client.name}</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", marginBottom: 4 }}>{client.name} — {selectedYear}</h1>
         <p style={{ fontSize: 14, color: C.textSecondary, marginBottom: 24 }}>{(client.events || []).length} events · {client.niche}</p>
-        <ListView events={client.events || []} plans={client.plans || {}} onClickEvent={e => setDetail(e)} />
+        {calView === "list"
+          ? <ListView events={client.events || []} plans={client.plans || {}} onClickEvent={e => setDetail(e)} />
+          : <CalendarGrid events={client.events || []} plans={client.plans || {}} year={selectedYear} onClickEvent={e => setDetail(e)} />
+        }
       </div>
       <footer style={{ padding: "24px 28px", textAlign: "center", marginTop: 40 }}><p style={{ fontSize: 12, color: C.textTertiary }}>Managed by D-DOUBLEU MEDIA</p></footer>
 
@@ -641,6 +663,13 @@ export default function App() {
     updateClient({ ...selectedClient, plans: np });
   };
 
+  const deleteEventForClient = (eventId) => {
+    const np = { ...selectedClient.plans };
+    delete np[eventId];
+    const ne = (selectedClient.events || []).filter(e => e.id !== eventId);
+    updateClient({ ...selectedClient, events: ne, plans: np });
+  };
+
   const addCustomEvent = () => {
     if (!evtName.trim() || !evtDate || !selectedClient) return;
     const parts = evtDate.split("-");
@@ -758,6 +787,7 @@ export default function App() {
           onClose={() => setDetailEvent(null)}
           onSavePlan={(eid, plan) => { savePlanForEvent(eid, plan); }}
           onDeletePlan={(eid) => { deletePlanForEvent(eid); }}
+          onDeleteEvent={(eid) => { deleteEventForClient(eid); }}
           onGeneratePlan={(evt) => generateSinglePlan(evt)}
           loading={loading}
         />
